@@ -1,130 +1,166 @@
-[adtech_README.md](https://github.com/user-attachments/files/29020527/adtech_README.md)
 # Ad-Tech Campaign Performance & A/B Testing Analysis
 ### Business Analyst Portfolio Project | Nasim Maleki
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)](https://python.org)
 [![SQL](https://img.shields.io/badge/SQL-SQLite-orange?logo=sqlite&logoColor=white)]()
-[![Stats](https://img.shields.io/badge/Statistics-A%2FB%20Testing-purple)]()
+[![Stats](https://img.shields.io/badge/Statistics-A%2FB%20Testing%20%7C%20Power%20Analysis-purple)]()
 [![Status](https://img.shields.io/badge/Status-Complete-brightgreen)]()
 
 ---
 
 ## Business Context
 
-As a BI Analyst at an ad-tech company, the task was to analyse campaign performance for the first half of the year (H1) and provide data-driven recommendations to improve ad performance over the next six months.
+An ad-tech company ran 40 user-acquisition campaigns across 10 markets in 2024. As Business Analyst, the task was to evaluate campaign performance over the full year and provide data-driven recommendations to improve ad spend efficiency, while also answering whether a new ad format should replace the existing one.
+
+This project deliberately follows a **complete business-analyst workflow** — business framing, stakeholder mapping, requirements, data governance, analysis, statistical testing, and quantified recommendations — not just exploratory data analysis.
 
 The project is split into two sections:
 
-1. **Campaign Performance Analysis** — using SQL and Python to evaluate which campaigns and user segments deliver the best return.
-2. **A/B Testing** — evaluating whether a new ad format should replace the existing one, using proper statistical testing.
+1. **Campaign Performance Analysis** — SQL and Python to evaluate which campaigns and user segments deliver the best return, plus budget utilisation, funnel, and seasonality.
+2. **A/B Testing** — whether a new ad format should replace the existing one, using a sampling-validity check, a two-proportion z-test, and a power analysis.
+
+---
+
+## The Business-Analyst Workflow
+
+| # | Section | BA Category |
+|---|---------|-------------|
+| 1 | Business Problem & Project Brief | Business Context |
+| 2 | Stakeholder Analysis | Stakeholder Analysis |
+| 3 | Requirements & Business Questions | Requirements Analysis |
+| 4 | Data Requirements & Data Dictionary | Data Requirements |
+| 5 | Business Rules & KPI Definitions | Business Rules |
+| 6 | Data Quality Assessment & Cleaning | Data Quality & Governance |
+| 7 | Campaign Performance Analysis (SQL) | Analysis & Insight |
+| 8 | Conversion Funnel Analysis | Analysis & Insight |
+| 9 | Segment Performance Analysis (IPM) | Analysis & Insight |
+| 10 | Time Trends & Seasonality | Analysis & Insight |
+| 11 | A/B Test — Sampling & Validity Check | Experimentation |
+| 12 | A/B Test — Significance & Power Analysis | Experimentation |
+| 13 | Recommendations & Decision Memo | Recommendations |
+| 14 | Executive Summary & Conclusion | Communication |
 
 ---
 
 ## Dataset
 
-The data models a typical ad-tech funnel — views, clicks, and installs across multiple campaigns and user segments.
+The data models a full ad-tech funnel — views, clicks, and installs across 40 campaigns and 3,000 users over 2024.
 
-| Table | Description |
-|-------|-------------|
-| Campaigns | Campaign budget, cost per install, start and end dates |
-| CampaignViews | Individual ad view events with timestamp and user |
-| CampaignClicks | Click events with timestamp and user |
-| CampaignInstalls | Install events with timestamp and user |
-| Users | User demographics — age group, gender, country |
+| Table | Grain (one row =) | Description |
+|-------|-------------------|-------------|
+| Campaigns | one campaign | Budget, cost per install, category, start/end dates |
+| CampaignViews | one ad view | View events with timestamp and user |
+| CampaignClicks | one ad click | Click events with timestamp and user |
+| CampaignInstalls | one app install | Install events with timestamp and user |
+| Users | one user | Demographics — age group, gender, country |
+| Control / Target Group | one A/B user | Format, age, country, ARPU |
+
+> **Data note:** the dataset is **synthetic**, generated to mirror the structure of a real assignment without using proprietary data. The generator script (`generate_adtech_data.py`) is included. It produces a full year of 2024 data with realistic funnel drop-off, seasonality, and deliberately injected data-quality issues.
 
 ---
 
 ## Section 1 — Campaign Performance Analysis
 
 ### Business Questions
-- Which campaigns outperformed, and which underperformed?
-- What budget adjustments should the company make?
+- Which campaigns performed best, and how efficiently was budget spent?
+- How much of each campaign's allocated budget was actually used?
+- Where in the Views → Clicks → Installs journey do we lose the most users?
 - Which user segments (age, gender, country) drive the best results?
+- Is there seasonality across the year?
 
 ### Approach
-Data was loaded into Python and structured into SQLite tables. Performance was analysed using SQL queries with **CTEs** to aggregate views, clicks, installs, spend, and active days per campaign. Custom KPIs were calculated to enable fair comparison:
+Data was loaded into Python and structured into SQLite tables. Performance was analysed using SQL queries with **CTEs** to aggregate views, clicks, installs, spend, and budget utilisation per campaign. Custom KPIs enabled fair comparison:
 
-- **Cost Per Install (CPI)** — total spend ÷ installs
-- **IPM (Installs Per Mille)** — installs per 1,000 views, by user segment
+- **Cost Per Install (CPI)** — spend ÷ installs
+- **Budget Utilisation** — spend ÷ allocated budget
+- **IPM (Installs Per Mille)** — installs per 1,000 views, by segment
 
 ### Key Findings
 
-**Campaign efficiency varies significantly.** Ranking campaigns by cost per install revealed clear top and bottom performers:
+**Budget is massively under-utilised.** Across all 40 campaigns, only **EUR 142,075 of the EUR 433,000 allocated budget was actually spent — 32.8%.** Of 40 campaigns, **29 spent less than half their budget**, while one campaign overspent to 193%. This is the single biggest finding: the company is leaving installs on the table while budget sits idle.
 
-- **Top performers** (lowest CPI): Campaign 8, Campaign 11, Campaign 4 — recommended for budget increase
-- **Medium performers**: Campaign 1, Campaign 9, Campaign 20 — maintain budget and monitor
-- **Underperformers** (highest CPI): Campaign 2, Campaign 14, Campaign 12 — recommended for budget reduction or pause
+**Campaign efficiency varies clearly.** Ranking by cost per install revealed distinct tiers:
+- **Most efficient** (lowest CPI): Campaign 13, Campaign 4, Campaign 22 — candidates for budget increase
+- **Least efficient** (highest CPI): Campaign 14, Campaign 29, Campaign 10 — candidates for reduction or pause
 
-**Segment performance is geographically concentrated.** IPM analysis by segment showed:
+**The funnel loses most users at the first step.** Views → Clicks → Installs:
+- 119,878 views → 38,728 clicks (32.3%) → 7,285 installs (18.8% of clicks)
+- Overall view-to-install conversion: **6.08%**
+- The largest absolute drop is **View → Click (81,150 users lost)** — the highest-leverage place to improve
 
-- Highest IPM in the **USA and Germany** (average IPM ~250–300), particularly in the **18–44 age range**
-- Lowest IPM in **Italy and Austria** (under 50 average IPM)
-- **No significant difference between male and female** users in install rate
+**Segment performance is geographically concentrated.** IPM analysis showed:
+- Highest IPM in the **USA and Germany**, particularly in the **18–44 age range**
+- Lowest IPM in **Italy and Austria**
+- **No meaningful difference between male and female** users
 - The single strongest segment: **users aged 18–24 in the USA**
 
-**Campaign effectiveness is country-dependent.** Campaign 9 performed best in the USA and Germany, while Campaign 18 was the most efficient in France — indicating that campaign strategy should be localised rather than applied uniformly.
+**Performance is seasonal.** Install rate falls from **~23% in spring (Mar–May) to ~13% in summer (Jun–Aug)** — summer traffic converts worse, not just lower volume. Budget concentrated in summer works harder for less return.
 
 ### Visualizations
 
-**IPM by Age Group, Gender, and Country**
-![IPM by segment](charts/ipm_by_age_gender_country.png)
+**Conversion Funnel**
+![Funnel](charts/funnel.png)
+
+**Funnel Flow (Sankey)**
+![Sankey](charts/funnel_sankey.png)
+
+**Monthly Installs — Seasonality**
+![Seasonality](charts/seasonality.png)
 
 **IPM Heatmap — Age Group vs Country**
-![IPM heatmap](charts/ipm_age_country_heatmap.png)
-
-**Average IPM per Campaign**
-![IPM per campaign](charts/ipm_per_campaign.png)
-
-**IPM by Campaign and Country**
-![IPM campaign country](charts/ipm_campaign_country_heatmap.png)
+![Segment heatmap](charts/segment_heatmap.png)
 
 ---
 
 ## Section 2 — A/B Testing
 
 ### Objective
-Evaluate whether a new ad format should replace the current format, by comparing user click-through behaviour between a control group (old format) and a target group (new format).
+Evaluate whether a new ad format should replace the current format, by comparing click-through behaviour between a control group (old format) and a target group (new format).
 
 ### Part 1 — Sampling Representativeness Check
 
-Before evaluating results, the validity of the 20/80 sampling split was assessed. Several imbalances were identified between the control and target groups:
+Before evaluating results, the validity of the 20/80 sampling split was assessed:
 
-- **No user overlap** between groups — good, confirms clean separation
-- **Gender distribution** was imbalanced (confirmed via chi-square test)
-- **Country distribution** was uneven — some countries appeared in only one group
-- **ARPU** was significantly higher in the target group — a potential confounder
-- **Age distribution** was balanced — no concern
+- **No user overlap** between groups — confirms clean separation
+- **Gender distribution** imbalanced (chi-square p = 0.18) — but Section 1 showed gender has no effect on conversion, so this is low-risk
+- **Country distribution** uneven — some markets appear in only one group
+- **ARPU** higher in the target group (21.30 vs 19.46) — a potential confounder
+- **Age distribution** balanced (43.6 vs 44.0) — no concern
 
-**Conclusion:** While a 20/80 split is acceptable from a risk-management perspective, the sampling was not fully representative. The imbalances in ARPU, country, and gender suggest results should be interpreted cautiously and randomisation improved.
+**Conclusion:** A 20/80 split is acceptable from a risk standpoint, but the sampling is not fully representative. ARPU and country imbalances mean results should be read cautiously.
 
 ### Part 2 — Statistical Significance Testing
-
-The observed results were:
 
 | Group | Format | Impressions | Clicks | CTR |
 |-------|--------|-------------|--------|-----|
 | Control | Old | 4,000 | 500 | 12.5% |
 | Target | New | 1,000 | 140 | 14.0% |
 
-A **two-proportion z-test** was run to determine whether the 1.5 percentage point CTR difference was statistically significant.
+A **two-proportion z-test** assessed whether the 1.5 percentage point CTR difference was significant.
 
-**Result:** z-statistic = −1.27, p-value = 0.204
-
-Since the p-value is well above 0.05, the difference is **not statistically significant**. The 1.5pp lift cannot be distinguished from random chance.
+**Result:** z = −1.27, p = 0.204. Since p > 0.05, the difference is **not statistically significant** — the 1.5pp lift cannot be distinguished from random chance.
 
 ### Part 3 — Power Analysis
 
-To quantify how much data would be needed for a reliable conclusion, a power analysis was run at 80% power and 5% significance:
+A power analysis at 80% power and 5% significance quantified how much data a reliable conclusion would need.
 
-**Result:** Approximately **8,013 impressions per group** are required to reliably detect a 1.5pp lift.
-
-The actual test used only 1,000 impressions in the target group — roughly **8 times fewer** than needed. This confirms the experiment was underpowered.
+**Result:** approximately **8,013 impressions per group** are required to detect a 1.5pp lift. The actual test used only 1,000 in the target group — roughly **8× too few**. The experiment was underpowered.
 
 ### Final Recommendation
 
-The new ad format shows early promise but the current test **cannot support a confident decision to switch**. Before rolling out the new format, the company should extend the experiment until each group reaches at least ~8,000 impressions. If the 1.5pp lift persists at that scale, the switch would be statistically justified.
+The new ad format shows early promise but the test **cannot support a confident decision to switch**. The company should extend the experiment until each group reaches ~8,000 impressions. If the 1.5pp lift persists at that scale, the switch would be statistically justified.
 
-This analysis demonstrates the importance of validating results statistically rather than acting on raw percentage differences alone.
+---
+
+## Recommendations Summary
+
+1. **Deploy unused budget** into proven-efficient campaigns (only 32.8% of budget spent)
+2. **Cap the overspending campaign** running at 193% of budget
+3. **Concentrate targeting** on 18–44 in USA and Germany
+4. **Drop gender-based targeting** — no effect on conversion
+5. **Shift budget away from the summer trough** (23% → 13% install rate)
+6. **Improve the View → Click stage** — the funnel's biggest drop-off
+7. **Do not switch ad format** until the A/B test reaches ~8,000 impressions per group
 
 ---
 
@@ -132,9 +168,9 @@ This analysis demonstrates the importance of validating results statistically ra
 
 | Tool | Purpose |
 |------|---------|
-| Python (Pandas, NumPy) | Data loading, transformation, KPI calculation |
+| Python (Pandas, NumPy) | Data loading, cleaning, KPI calculation |
 | SQL (SQLite) | Campaign aggregation using CTEs and multi-table joins |
-| Matplotlib, Seaborn | Data visualization (FacetGrid, heatmaps, bar charts) |
+| Matplotlib, Seaborn, Plotly | Visualization — heatmaps, bar charts, Sankey funnel |
 | SciPy, Statsmodels | Chi-square test, two-proportion z-test, power analysis |
 
 ---
@@ -145,23 +181,30 @@ This analysis demonstrates the importance of validating results statistically ra
 adtech-campaign-analysis/
 │
 ├── README.md
-├── adtech_analysis.ipynb        # Full analysis notebook
+├── generate_adtech_data.py          # Synthetic data generator
+├── adtech_analysis.ipynb            # Full 14-section analysis notebook
 │
 ├── data/
-│   └── Test_Task_Data.xlsx      # Source dataset
+│   ├── campaigns.csv
+│   ├── campaign_views.csv
+│   ├── campaign_clicks.csv
+│   ├── campaign_installs.csv
+│   ├── users.csv
+│   ├── ab_control.csv
+│   └── ab_target.csv
 │
 └── charts/
-    ├── ipm_by_age_gender_country.png
-    ├── ipm_age_country_heatmap.png
-    ├── ipm_per_campaign.png
-    └── ipm_campaign_country_heatmap.png
+    ├── funnel.png
+    ├── funnel_sankey.png
+    ├── seasonality.png
+    └── segment_heatmap.png
 ```
 
 ---
 
 ## Key Takeaway
 
-This project demonstrates the full analytical workflow expected of a Business Analyst: structuring raw data with SQL, calculating meaningful KPIs, segmenting performance by user demographics, and — critically — applying rigorous statistical testing to separate real effects from noise before making business recommendations.
+This project demonstrates the full workflow expected of a Business Analyst: framing a business problem, mapping stakeholders, defining requirements and metrics, governing data quality, analysing performance with SQL, and — critically — applying rigorous statistical testing to separate real effects from noise before making quantified, decision-ready recommendations.
 
 ---
 
